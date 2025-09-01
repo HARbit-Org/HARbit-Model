@@ -1,0 +1,44 @@
+config:
+  {
+    "A": "Walking",
+    "B": "Jogging",
+    "C": "Stairs",
+    "D": "Sitting",
+    "E": "Standing",
+    "F": "Typing",
+    "G": "Brushing Teeth",
+    "H": "Eating Soup",
+    "I": "Eating Chips",
+    "J": "Eating Pasta",
+    "K": "Drinking from Cup",
+    "L": "Eating Sandwich",
+    "M": "Kicking (Soccer Ball)",
+    "N": "Playing Catch w/Tennis Ball",
+    "O": "Dribbling (Basketball)",
+    "P": "Writing",
+    "Q": "Clapping",
+    "R": "Folding Clothes"
+  }
+
+
+activities:
+  {
+    "Walking": "Caminando",
+    "Jogging": "Trotando",
+    "Stairs": "Subiendo escaleras",
+    "Sitting": "Sentado",
+    "Standing": "De pie",
+    "Typing": "Escribiendo a máquina",
+    "Brushing Teeth": "Cepillándose los dientes",
+    "Eating Soup": "Comiendo sopa",
+    "Eating Chips": "Comiendo papas fritas",
+    "Eating Pasta": "Comiendo pasta",
+    "Drinking from Cup": "Bebiendo de una taza",
+    "Eating Sandwich": "Comiendo sándwich",
+    "Kicking (Soccer Ball)": "Pateando (balón de fútbol)",
+    "Playing Catch w/Tennis Ball": "Jugando a atrapar con una pelota de tenis",
+    "Dribbling (Basketball)": "Driblando (baloncesto)",
+    "Writing": "Escribiendo",
+    "Clapping": "Aplaudiendo",
+    "Folding Clothes": "Doblando ropa"
+  }
