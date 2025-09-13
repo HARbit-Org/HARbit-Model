@@ -13,11 +13,11 @@ config:
     "K": "Drinking from Cup",
     "L": "Eating Sandwich",
     "M": "Kicking (Soccer Ball)",
-    "N": "Playing Catch w/Tennis Ball",
-    "O": "Dribbling (Basketball)",
-    "P": "Writing",
-    "Q": "Clapping",
-    "R": "Folding Clothes"
+    "O": "Playing Catch w/Tennis Ball",
+    "P": "Dribbling (Basketball)",
+    "Q": "Writing",
+    "R": "Clapping",
+    "S": "Folding Clothes"
   }
 
 
@@ -42,3 +42,5 @@ activities:
     "Clapping": "Aplaudiendo",
     "Folding Clothes": "Doblando ropa"
   }
+
+ bike sit, stairsup, stairsdown
