@@ -13,6 +13,10 @@ def balanced_plot(data: (pd.DataFrame | pl.DataFrame), name = str):
                 .agg(pl.count().alias("Count"))
 
     sns.barplot(fq_label, x = 'Activity Label', y = 'Count')
+    
+    plt.ylabel("Frecuencia")
+    plt.xlabel("Actividad")
+    
     save_plot(os.path.join(ROOT_IMAGES, f'{name}.png'), plt)
 
 
