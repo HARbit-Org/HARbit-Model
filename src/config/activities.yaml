@@ -1,46 +1,56 @@
 config:
-  {
-    "A": "Walking",
-    "B": "Jogging",
-    "C": "Stairs",
-    "D": "Sitting",
-    "E": "Standing",
-    "F": "Typing",
-    "G": "Brushing Teeth",
-    "H": "Eating Soup",
-    "I": "Eating Chips",
-    "J": "Eating Pasta",
-    "K": "Drinking from Cup",
-    "L": "Eating Sandwich",
-    "M": "Kicking (Soccer Ball)",
-    "O": "Playing Catch w/Tennis Ball",
-    "P": "Dribbling (Basketball)",
-    "Q": "Writing",
-    "R": "Clapping",
-    "S": "Folding Clothes"
-  }
+    labels: 
+        {
+          "A": "Walking", # Walk
+          "B": "Jogging", # Walk
+          "C": "Stairs", # Walk
+          "D": "Sitting", # Static
+          "E": "Standing", # Static
+          "F": "Typing", # Static
+          "G": "Brushing Teeth", 
+          "H": "Eating Soup", # Eating
+          "I": "Eating Chips", # Eating
+          "J": "Eating Pasta", # Eating
+          "K": "Drinking from Cup", # Eatinga
+          "L": "Eating Sandwich", # Eating
+          "M": "Kicking (Soccer Ball)", 
+          "O": "Playing Catch w/Tennis Ball",
+          "P": "Dribbling (Basketball)",
+          "Q": "Writing",
+          "R": "Clapping",
+          "S": "Folding Clothes"
+        }
 
+    clusters: 
+      { 
+        "Walk": ['Walking', 'Jogging', 'Stairs'],
+        "Sit": ['Sitting'],
+        "Type": ['Typing'],
+        "Write": ['Writing'],
+        "Stand": ['Standing'],
+        "Eat": ['Eating Soup', 'Eating Chips', 'Eating Pasta', 'Eating Sandwich', 'Drinking from Cup'],
+        "Workouts": ['Kicking (Soccer Ball)', 'Playing Catch w/Tennis Ball', 'Dribbling (Basketball)'],
+        "Others": ['Clapping', 'Folding Clothes', 'Brushing Teeth']
+      }
 
-activities:
-  {
-    "Walking": "Caminando",
-    "Jogging": "Trotando",
-    "Stairs": "Subiendo escaleras",
-    "Sitting": "Sentado",
-    "Standing": "De pie",
-    "Typing": "Escribiendo a máquina",
-    "Brushing Teeth": "Cepillándose los dientes",
-    "Eating Soup": "Comiendo sopa",
-    "Eating Chips": "Comiendo papas fritas",
-    "Eating Pasta": "Comiendo pasta",
-    "Drinking from Cup": "Bebiendo de una taza",
-    "Eating Sandwich": "Comiendo sándwich",
-    "Kicking (Soccer Ball)": "Pateando (balón de fútbol)",
-    "Playing Catch w/Tennis Ball": "Jugando a atrapar con una pelota de tenis",
-    "Dribbling (Basketball)": "Driblando (baloncesto)",
-    "Writing": "Escribiendo",
-    "Clapping": "Aplaudiendo",
-    "Folding Clothes": "Doblando ropa"
-  }
-
- bike sit, stairsup, stairsdown
+    activities:
+      {
+        "Walking": "Caminando",
+        "Jogging": "Trotando",
+        "Stairs": "Subiendo escaleras",
+        "Sitting": "Sentado",
+        "Standing": "De pie",
+        "Typing": "Escribiendo a máquina",
+        "Brushing Teeth": "Cepillándose los dientes",
+        "Eating Soup": "Comiendo sopa",
+        "Eating Chips": "Comiendo papas fritas",
+        "Eating Pasta": "Comiendo pasta",
+        "Drinking from Cup": "Bebiendo de una taza",
+        "Eating Sandwich": "Comiendo sándwich",
+        "Kicking (Soccer Ball)": "Pateando (balón de fútbol)",
+        "Playing Catch w/Tennis Ball": "Jugando a atrapar con una pelota de tenis",
+        "Dribbling (Basketball)": "Driblando (baloncesto)",
+        "Writing": "Escribiendo",
+        "Clapping": "Aplaudiendo",
+        "Folding Clothes": "Doblando ropa"
+      }
