@@ -9,12 +9,12 @@ _early_config = config['early_stopping']
 _reduce_cofig = config['ReduceLROnPlateau']
 
 callbacks = [
-    # EarlyStopping(
-    #     monitor                 = _early_config['monitor'],
-    #     patience                = _early_config['patience'],
-    #     restore_best_weights    = _early_config['restore_best_weights'],
-    #     verbose                 = _early_config['verbose']
-    # ),
+    EarlyStopping(
+        monitor                 = _early_config['monitor'],
+        patience                = _early_config['patience'],
+        restore_best_weights    = _early_config['restore_best_weights'],
+        verbose                 = _early_config['verbose']
+    ),
     ReduceLROnPlateau(
         monitor     = _reduce_cofig['monitor'],
         factor      = _reduce_cofig['factor'],

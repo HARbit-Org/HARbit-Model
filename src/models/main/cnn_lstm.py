@@ -19,48 +19,48 @@ _cnn_lstm_config = config['cnn-lstm']
 
 def create_cnn_lstm_model(input_shape, num_classes):
     """
-    Modelo CNN-LSTM optimizado para características extraídas
-    Diseñado para input_shape = (1, 68) - solo 1 timestep
+    Modelo CNN-LSTM optimizado para secuencias de características extraídas.
+    Diseñado para input_shape = (timesteps, features), ej: (10, 68).
     """
     model = Sequential([
-        # Capa Conv1D con kernel_size=1 (no hay secuencia temporal)
-        Conv1D(filters=64, kernel_size=1, activation='relu', input_shape=input_shape),
+        # Bloque convolucional: detecta patrones locales en las secuencias
+        Conv1D(filters=64, kernel_size=3, activation='relu', padding='same', input_shape=input_shape),
+        BatchNormalization(),
+        # Dropout(0.3),
+
+        Conv1D(filters=128, kernel_size=3, activation='relu', padding='same'),
+        BatchNormalization(),
+        # Dropout(0.3),
+
+        MaxPooling1D(pool_size=2),  # reduce dimensionalidad y fuerza abstracción
+
+        Conv1D(filters=256, kernel_size=3, activation='relu', padding='same'),
         BatchNormalization(),
         Dropout(0.3),
-        
-        # Segunda capa Conv1D
-        Conv1D(filters=128, kernel_size=1, activation='relu'),
-        BatchNormalization(),
-        Dropout(0.3),
-        
-        # Tercera capa Conv1D para mayor extracción de características
-        Conv1D(filters=256, kernel_size=1, activation='relu'),
-        BatchNormalization(),
-        Dropout(0.3),
-        
-        # LSTM para procesar las características (aunque timestep=1, ayuda con representación)
+
+        # LSTM: captura dependencias temporales en las features extraídas
         LSTM(128, return_sequences=False, dropout=0.4, recurrent_dropout=0.4),
-        
-        # Capas densas para clasificación final
+
+        # Clasificación densa
         Dense(256, activation='relu'),
         BatchNormalization(),
-        Dropout(0.5),
-        
+        # Dropout(0.3),
+
         Dense(128, activation='relu'),
         BatchNormalization(),
-        Dropout(0.4),
-        
-        Dense(64, activation='relu'),
         Dropout(0.3),
-        
+
+        Dense(64, activation='relu'),
+        # Dropout(0.3),
+
         Dense(num_classes, activation='softmax')
     ])
 
-    # Hiperparámetros del modelo
+    # Compilación
     model.compile(
-        optimizer   =   Adam(learning_rate = _cnn_lstm_config['learning_rate']),
-        loss        =   _cnn_lstm_config['loss'],
-        metrics     =   _cnn_lstm_config['metrics']
+        optimizer   = Adam(learning_rate=_cnn_lstm_config['learning_rate']),
+        loss        = _cnn_lstm_config['loss'],
+        metrics     = _cnn_lstm_config['metrics']
     )
     
     return model
