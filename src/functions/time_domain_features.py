@@ -29,6 +29,8 @@ def extract_time_domain_features(window_data):
         # Características de la señal
         features[f'{axis}_mad'] = np.mean(np.abs(data - np.mean(data)))  # Mean Absolute Deviation
         features[f'{axis}_iqr'] = np.percentile(data, 75) - np.percentile(data, 25)  # Interquartile Range
+
+    
         
     # Características inter-eje
     magnitude = np.sqrt(window_data['X']**2 + window_data['Y']**2 + window_data['Z']**2)

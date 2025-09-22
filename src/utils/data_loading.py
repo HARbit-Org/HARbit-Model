@@ -33,11 +33,11 @@ def normalize_columns(data_base: pl.DataFrame | pd.DataFrame,
 
     return None
 
-def convert_timestamp(data_temp: pd.DataFrame | pl.DataFrame):
+def convert_timestamp(data_temp: pd.DataFrame | pl.DataFrame, type = 'ns'):
     if isinstance(data_temp, pl.DataFrame):
         # Caso Polars
         df_final = data_temp.with_columns(
-                pl.col("Timestamp").cast(pl.Datetime("ns")).alias("Timestamp")
+                pl.col("Timestamp").cast(pl.Datetime(type)).alias("Timestamp")
             ).sort(["Subject-id", "Activity Label", "Timestamp"])
         
         return df_final
