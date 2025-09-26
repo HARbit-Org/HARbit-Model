@@ -1,9 +1,11 @@
 from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
 
 import yaml
+from pathlib import Path
 
-with open(r"F:\UPC\Tesis\HARbit-Model\src\models\config\callbacks.yaml", 'r') as file:
-    config = yaml.safe_load(file)['config']
+CONFIG_PATH = Path(__file__).resolve().parents[1] / "config" / "callbacks.yaml"
+with open(CONFIG_PATH, "r") as file:
+    config = yaml.safe_load(file)["config"]
 
 _early_config = config['early_stopping']
 _reduce_cofig = config['ReduceLROnPlateau']

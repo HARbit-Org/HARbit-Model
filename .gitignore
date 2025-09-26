@@ -1,3 +1,12 @@
+# Folders
 src/data
 src/figures/images
 src/test/data
+src/utils/__pycache__
+src/models/main/__pycache__
+final_model
+
+# Files
+*.h5
+*.joblib
+*.csv
