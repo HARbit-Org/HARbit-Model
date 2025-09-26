@@ -1,3 +1,8 @@
 src/data
 src/figures/images
 src/test/data
+
+src/cnn_temporal_20_epochs_93
+src/cnn_temporal_100_epochs_98
+
+src/models/main/__pycache__
