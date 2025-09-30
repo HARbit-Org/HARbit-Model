@@ -5,173 +5,6 @@ import warnings
 from scipy.interpolate import interp1d
 from scipy import signal
 
-def create_multimodal_windows_robust(df_accel, df_gyro=None, window_seconds=5, 
-                                   overlap_percent=50, sampling_rate=20, 
-                                   target_timesteps=250, min_data_threshold=0.8, 
-                                   max_gap_seconds=1.0, sync_tolerance_ms=50):
-    """
-    Versión MULTIMODAL ROBUSTA: Crea ventanas sincronizadas de acelerómetro y giroscopio
-    
-    Args:
-        df_accel: DataFrame con datos de acelerómetro (Polars o Pandas)
-        df_gyro: DataFrame con datos de giroscopio (opcional)
-        window_seconds: Duración de la ventana en segundos (default: 5)
-        overlap_percent: Porcentaje de solapamiento (default: 50)
-        sampling_rate: Frecuencia de muestreo en Hz (default: 20)
-        target_timesteps: Número objetivo de timesteps por ventana (default: 250)
-        min_data_threshold: Umbral mínimo de datos válidos (0.5 = 50%)
-        max_gap_seconds: Máximo gap permitido en segundos (1.0s)
-        sync_tolerance_ms: Tolerancia de sincronización en milisegundos (50ms)
-        
-    Returns:
-        X: Array con forma (n_windows, timesteps, channels) - datos de ventanas
-        y: Array con etiquetas de actividad
-        subjects: Array con IDs de usuario
-        metadata: DataFrame con información de las ventanas
-    """
-    
-    # Determinar número de canales
-    if df_gyro is not None:
-        total_channels = 6  # 3 accel + 3 gyro
-        print(f"🔧 CONFIGURACIÓN MULTIMODAL (Accel + Gyro):")
-    else:
-        total_channels = 3  # Solo accel
-        print(f"🔧 CONFIGURACIÓN MONOMODAL (Solo Accel):")
-    
-    print(f"  Duración: {window_seconds}s")
-    print(f"  Timesteps objetivo: {target_timesteps}")
-    print(f"  Canales totales: {total_channels}")
-    print(f"  Frecuencia de muestreo: {sampling_rate}Hz")
-    print(f"  Solapamiento: {overlap_percent}%")
-    print(f"  Umbral mínimo de datos: {min_data_threshold*100:.1f}%")
-    print(f"  Máximo gap permitido: {max_gap_seconds}s")
-    print(f"  Tolerancia sincronización: {sync_tolerance_ms}ms")
-    
-    # Preparar DataFrames
-    df_accel_clean = prepare_sensor_dataframe(df_accel, 'accel')
-    
-    if df_gyro is not None:
-        df_gyro_clean = prepare_sensor_dataframe(df_gyro, 'gyro')
-        
-        # Sincronizar datasets si ambos están disponibles
-        print(f"\n🔄 SINCRONIZANDO SENSORES...")
-        df_accel_sync, df_gyro_sync = synchronize_multimodal_data(
-            df_accel_clean, df_gyro_clean, sync_tolerance_ms
-        )
-    else:
-        df_accel_sync = df_accel_clean
-        df_gyro_sync = None
-    
-    # Calcular parámetros temporales
-    window_duration_ns = int(window_seconds * 1e9)
-    step_duration_ns = int(window_duration_ns * (100 - overlap_percent) / 100)
-    
-    print(f"\n📏 PARÁMETROS TEMPORALES:")
-    print(f"  Duración de ventana: {window_seconds}s")
-    print(f"  Paso entre ventanas: {step_duration_ns / 1e9:.2f}s")
-    
-    # Almacenar resultados
-    X_windows = []
-    y_labels = []
-    subjects_list = []
-    metadata_list = []
-    
-    total_windows_attempted = 0
-    total_windows_created = 0
-    
-    # Procesar por usuario y actividad
-    for (user_id, activity), accel_group in df_accel_sync.groupby(['Subject-id', 'Activity Label']):
-        
-        # Obtener grupo correspondiente de giroscopio
-        if df_gyro_sync is not None:
-            gyro_group = df_gyro_sync[
-                (df_gyro_sync['Subject-id'] == user_id) & 
-                (df_gyro_sync['Activity Label'] == activity)
-            ]
-            if len(gyro_group) == 0:
-                print(f"⚠️ Usuario {user_id}, {activity}: Sin datos de giroscopio correspondientes")
-                continue
-        else:
-            gyro_group = None
-        
-        print(f"\n👤 Usuario {user_id}, {activity}:")
-        print(f"   Accel: {len(accel_group)} muestras")
-        if gyro_group is not None:
-            print(f"   Gyro: {len(gyro_group)} muestras")
-        
-        # Verificar datos mínimos
-        min_samples = window_seconds * sampling_rate
-        if len(accel_group) < min_samples:
-            print(f"   ⚠️ Muy pocos datos de acelerómetro ({len(accel_group)} < {min_samples})")
-            continue
-        
-        if gyro_group is not None and len(gyro_group) < min_samples:
-            print(f"   ⚠️ Muy pocos datos de giroscopio ({len(gyro_group)} < {min_samples})")
-            continue
-        
-        # Crear ventanas multimodales
-        windows_data = create_synchronized_windows_robust(
-            accel_group, gyro_group, window_seconds, overlap_percent,
-            target_timesteps, min_data_threshold, max_gap_seconds,
-            sync_tolerance_ms, sampling_rate
-        )
-        
-        # Procesar ventanas creadas
-        window_count = 0
-        for window_data in windows_data:
-            total_windows_attempted += 1
-            
-            if window_data['is_valid']:
-                X_windows.append(window_data['sensor_data'])
-                y_labels.append(activity)
-                subjects_list.append(user_id)
-                
-                # Metadata detallada
-                metadata_list.append({
-                    'Subject-id': user_id,
-                    'Activity Label': activity,
-                    'window_start': window_data['start_time'],
-                    'window_end': window_data['end_time'],
-                    'window_idx': window_count,
-                    'accel_samples': window_data['accel_samples'],
-                    'gyro_samples': window_data.get('gyro_samples', 0),
-                    'sync_quality': window_data.get('sync_quality', 1.0),
-                    'channels': total_channels,
-                    'data_coverage': window_data['data_coverage'],
-                    'max_gap_s': window_data['max_gap'],
-                    'resampled_timesteps': target_timesteps
-                })
-                
-                window_count += 1
-                total_windows_created += 1
-        
-        print(f"   ✅ Creadas {window_count} ventanas válidas")
-    
-    # Resumen y resultados
-    print(f"\n📊 RESUMEN MULTIMODAL:")
-    print(f"  Ventanas intentadas: {total_windows_attempted}")
-    print(f"  Ventanas creadas: {total_windows_created}")
-    if total_windows_attempted > 0:
-        print(f"  Tasa de éxito: {(total_windows_created/total_windows_attempted)*100:.1f}%")
-    
-    if len(X_windows) > 0:
-        X = np.array(X_windows)
-        y = np.array(y_labels)
-        subjects = np.array(subjects_list)
-        metadata_df = pd.DataFrame(metadata_list)
-        
-        print(f"\n✅ RESULTADO FINAL MULTIMODAL:")
-        print(f"  Forma de X: {X.shape} (samples, timesteps, channels)")
-        print(f"  Canales: {X.shape[2]} ({'accel_xyz + gyro_xyz' if total_channels == 6 else 'solo accel_xyz'})")
-        print(f"  Total ventanas: {len(X)}")
-        print(f"  Usuarios únicos: {len(np.unique(subjects))}")
-        print(f"  Actividades: {sorted(np.unique(y))}")
-        
-        return X, y, subjects, metadata_df
-    else:
-        print("❌ No se crearon ventanas válidas")
-        return None, None, None, None
-
 
 def prepare_sensor_dataframe(df, sensor_type):
     """Prepara y limpia DataFrame de sensor"""
@@ -267,64 +100,6 @@ def analyze_sync_quality_fast(df_accel, df_gyro, tolerance_ms, sample_size=10000
         print(f"    ✅ Sincronización: {sync_rate:.1f}% (diff. promedio: {avg_diff:.1f}ms)")
     else:
         print(f"    ⚠️ Baja sincronización: <{tolerance_ms}ms")
-
-
-def create_synchronized_windows_robust(accel_group, gyro_group, window_seconds, 
-                                     overlap_percent, target_timesteps, 
-                                     min_data_threshold, max_gap_seconds,
-                                     sync_tolerance_ms, sampling_rate):
-    """Crea ventanas sincronizadas de múltiples sensores"""
-    
-    windows_data = []
-    
-    # Parámetros temporales
-    window_duration_ns = int(window_seconds * 1e9)
-    step_duration_ns = int(window_duration_ns * (100 - overlap_percent) / 100)
-    
-    # Rango temporal
-    accel_times_ns = accel_group['Timestamp'].astype('int64')
-    start_time_ns = accel_times_ns.min()
-    end_time_ns = accel_times_ns.max()
-    
-    if gyro_group is not None:
-        gyro_times_ns = gyro_group['Timestamp'].astype('int64')
-        start_time_ns = max(start_time_ns, gyro_times_ns.min())
-        end_time_ns = min(end_time_ns, gyro_times_ns.max())
-    
-    # Crear ventanas deslizantes
-    current_start_ns = start_time_ns
-    
-    while current_start_ns + window_duration_ns <= end_time_ns:
-        current_end_ns = current_start_ns + window_duration_ns
-        
-        # Extraer datos de acelerómetro para esta ventana
-        accel_mask = (
-            (accel_times_ns >= current_start_ns) & 
-            (accel_times_ns < current_end_ns)
-        )
-        window_accel = accel_group[accel_mask]
-        
-        # Extraer datos de giroscopio si está disponible
-        if gyro_group is not None:
-            gyro_mask = (
-                (gyro_times_ns >= current_start_ns) & 
-                (gyro_times_ns < current_end_ns)
-            )
-            window_gyro = gyro_group[gyro_mask]
-        else:
-            window_gyro = None
-        
-        # Validar y procesar ventana
-        window_data = process_multimodal_window_robust(
-            window_accel, window_gyro, target_timesteps, 
-            window_seconds, min_data_threshold, max_gap_seconds,
-            current_start_ns, current_end_ns, sampling_rate
-        )
-        
-        windows_data.append(window_data)
-        current_start_ns += step_duration_ns
-    
-    return windows_data
 
 
 def process_multimodal_window_robust(window_accel, window_gyro, target_timesteps,
@@ -580,3 +355,386 @@ def is_window_quality_good(resampled_window, max_std_threshold=50.0):
             return False
     
     return True
+
+
+def create_multimodal_windows_robust(df_accel, df_gyro=None, window_seconds=5, 
+                                   overlap_percent=50, sampling_rate=20, 
+                                   target_timesteps=250, min_data_threshold=0.8, 
+                                   max_gap_seconds=1.0, sync_tolerance_ms=50):
+    """
+    Versión MULTIMODAL ROBUSTA: Crea ventanas sincronizadas de acelerómetro y giroscopio
+    
+    Args:
+        df_accel: DataFrame con datos de acelerómetro (Polars o Pandas)
+        df_gyro: DataFrame con datos de giroscopio (opcional)
+        window_seconds: Duración de la ventana en segundos (default: 5)
+        overlap_percent: Porcentaje de solapamiento (default: 50)
+        sampling_rate: Frecuencia de muestreo en Hz (default: 20)
+        target_timesteps: Número objetivo de timesteps por ventana (default: 250)
+        min_data_threshold: Umbral mínimo de datos válidos (0.5 = 50%)
+        max_gap_seconds: Máximo gap permitido en segundos (1.0s)
+        sync_tolerance_ms: Tolerancia de sincronización en milisegundos (50ms)
+        
+    Returns:
+        X: Array con forma (n_windows, timesteps, channels) - datos de ventanas
+        y: Array con etiquetas de actividad
+        subjects: Array con IDs de usuario
+        metadata: DataFrame con información de las ventanas
+    """
+    
+    # Determinar número de canales objetivo
+    if df_gyro is not None:
+        target_channels = 6  # 3 accel + 3 gyro
+        print(f"🔧 CONFIGURACIÓN MULTIMODAL (Accel + Gyro):")
+        mode = 'multimodal'
+    else:
+        target_channels = 3  # Solo accel
+        print(f"🔧 CONFIGURACIÓN MONOMODAL (Solo Accel):")
+        mode = 'monomodal'
+    
+    print(f"  Duración: {window_seconds}s")
+    print(f"  Timesteps objetivo: {target_timesteps}")
+    print(f"  Canales objetivo: {target_channels}")
+    print(f"  Frecuencia de muestreo: {sampling_rate}Hz")
+    print(f"  Solapamiento: {overlap_percent}%")
+    print(f"  Umbral mínimo de datos: {min_data_threshold*100:.1f}%")
+    print(f"  Máximo gap permitido: {max_gap_seconds}s")
+    print(f"  Tolerancia sincronización: {sync_tolerance_ms}ms")
+    
+    # Preparar DataFrames
+    df_accel_clean = prepare_sensor_dataframe(df_accel, 'accel')
+    
+    if df_gyro is not None:
+        df_gyro_clean = prepare_sensor_dataframe(df_gyro, 'gyro')
+        
+        # Sincronizar datasets si ambos están disponibles
+        print(f"\n🔄 SINCRONIZANDO SENSORES...")
+        df_accel_sync, df_gyro_sync = synchronize_multimodal_data(
+            df_accel_clean, df_gyro_clean, sync_tolerance_ms
+        )
+    else:
+        df_accel_sync = df_accel_clean
+        df_gyro_sync = None
+    
+    # Calcular parámetros temporales
+    window_duration_ns = int(window_seconds * 1e9)
+    step_duration_ns = int(window_duration_ns * (100 - overlap_percent) / 100)
+    
+    print(f"\n📏 PARÁMETROS TEMPORALES:")
+    print(f"  Duración de ventana: {window_seconds}s")
+    print(f"  Paso entre ventanas: {step_duration_ns / 1e9:.2f}s")
+    
+    # Almacenar resultados con forma consistente
+    X_windows = []
+    y_labels = []
+    subjects_list = []
+    metadata_list = []
+    
+    total_windows_attempted = 0
+    total_windows_created = 0
+    windows_with_gyro = 0
+    windows_accel_only = 0
+    
+    # Procesar por usuario y actividad
+    for (user_id, activity), accel_group in df_accel_sync.groupby(['Subject-id', 'Activity Label']):
+        
+        # Obtener grupo correspondiente de giroscopio
+        if df_gyro_sync is not None:
+            gyro_group = df_gyro_sync[
+                (df_gyro_sync['Subject-id'] == user_id) & 
+                (df_gyro_sync['Activity Label'] == activity)
+            ]
+            if len(gyro_group) == 0:
+                print(f"⚠️ Usuario {user_id}, {activity}: Sin datos de giroscopio correspondientes")
+                gyro_group = None
+        else:
+            gyro_group = None
+        
+        print(f"\n👤 Usuario {user_id}, {activity}:")
+        print(f"   Accel: {len(accel_group)} muestras")
+        if gyro_group is not None:
+            print(f"   Gyro: {len(gyro_group)} muestras")
+        
+        # Verificar datos mínimos
+        min_samples = window_seconds * sampling_rate
+        if len(accel_group) < min_samples:
+            print(f"   ⚠️ Muy pocos datos de acelerómetro ({len(accel_group)} < {min_samples})")
+            continue
+        
+        # Crear ventanas multimodales
+        windows_data = create_synchronized_windows_robust(
+            accel_group, gyro_group, window_seconds, overlap_percent,
+            target_timesteps, min_data_threshold, max_gap_seconds,
+            sync_tolerance_ms, sampling_rate, target_channels, mode
+        )
+        
+        # Procesar ventanas creadas
+        window_count = 0
+        for window_data in windows_data:
+            total_windows_attempted += 1
+            
+            if window_data['is_valid']:
+                # VERIFICAR FORMA CONSISTENTE
+                window_shape = window_data['sensor_data'].shape
+                expected_shape = (target_timesteps, target_channels)
+                
+                if window_shape == expected_shape:
+                    X_windows.append(window_data['sensor_data'])
+                    y_labels.append(activity)
+                    subjects_list.append(user_id)
+                    
+                    # Contar tipos de ventana
+                    if window_data['sensor_data'].shape[1] == 6:
+                        windows_with_gyro += 1
+                    else:
+                        windows_accel_only += 1
+                    
+                    # Metadata detallada
+                    metadata_list.append({
+                        'Subject-id': user_id,
+                        'Activity Label': activity,
+                        'window_start': window_data['start_time'],
+                        'window_end': window_data['end_time'],
+                        'window_idx': window_count,
+                        'accel_samples': window_data['accel_samples'],
+                        'gyro_samples': window_data.get('gyro_samples', 0),
+                        'sync_quality': window_data.get('sync_quality', 1.0),
+                        'channels': target_channels,
+                        'actual_channels': window_data['sensor_data'].shape[1],
+                        'data_coverage': window_data['data_coverage'],
+                        'max_gap_s': window_data['max_gap'],
+                        'resampled_timesteps': target_timesteps
+                    })
+                    
+                    window_count += 1
+                    total_windows_created += 1
+                else:
+                    print(f"   ⚠️ Ventana con forma incorrecta: {window_shape} vs {expected_shape}")
+        
+        print(f"   ✅ Creadas {window_count} ventanas válidas")
+    
+    # Resumen y resultados
+    print(f"\n📊 RESUMEN MULTIMODAL:")
+    print(f"  Ventanas intentadas: {total_windows_attempted}")
+    print(f"  Ventanas creadas: {total_windows_created}")
+    print(f"  Ventanas con gyro: {windows_with_gyro}")
+    print(f"  Ventanas solo accel: {windows_accel_only}")
+    if total_windows_attempted > 0:
+        print(f"  Tasa de éxito: {(total_windows_created/total_windows_attempted)*100:.1f}%")
+    
+    if len(X_windows) > 0:
+        # VERIFICAR CONSISTENCIA ANTES DE CREAR ARRAY
+        shapes = [w.shape for w in X_windows]
+        unique_shapes = list(set(shapes))
+        
+        if len(unique_shapes) > 1:
+            print(f"⚠️ ADVERTENCIA: Formas inconsistentes detectadas: {unique_shapes}")
+            print("Filtrando solo ventanas con forma correcta...")
+            
+            # Filtrar solo ventanas con la forma correcta
+            correct_shape = (target_timesteps, target_channels)
+            valid_indices = [i for i, shape in enumerate(shapes) if shape == correct_shape]
+            
+            X_windows = [X_windows[i] for i in valid_indices]
+            y_labels = [y_labels[i] for i in valid_indices]
+            subjects_list = [subjects_list[i] for i in valid_indices]
+            metadata_list = [metadata_list[i] for i in valid_indices]
+            
+            print(f"Ventanas filtradas: {len(X_windows)}")
+        
+        if len(X_windows) > 0:
+            X = np.array(X_windows)
+            y = np.array(y_labels)
+            subjects = np.array(subjects_list)
+            metadata_df = pd.DataFrame(metadata_list)
+            
+            print(f"\n✅ RESULTADO FINAL MULTIMODAL:")
+            print(f"  Forma de X: {X.shape} (samples, timesteps, channels)")
+            print(f"  Canales: {X.shape[2]} ({'accel_xyz + gyro_xyz' if target_channels == 6 else 'solo accel_xyz'})")
+            print(f"  Total ventanas: {len(X)}")
+            print(f"  Usuarios únicos: {len(np.unique(subjects))}")
+            print(f"  Actividades: {sorted(np.unique(y))}")
+            
+            return X, y, subjects, metadata_df
+        else:
+            print("❌ No quedaron ventanas válidas después del filtrado")
+            return None, None, None, None
+    else:
+        print("❌ No se crearon ventanas válidas")
+        return None, None, None, None
+
+
+def create_synchronized_windows_robust(accel_group, gyro_group, window_seconds, 
+                                     overlap_percent, target_timesteps, 
+                                     min_data_threshold, max_gap_seconds,
+                                     sync_tolerance_ms, sampling_rate, 
+                                     target_channels, mode):
+    """Crea ventanas sincronizadas de múltiples sensores con forma consistente"""
+    
+    windows_data = []
+    
+    # Parámetros temporales
+    window_duration_ns = int(window_seconds * 1e9)
+    step_duration_ns = int(window_duration_ns * (100 - overlap_percent) / 100)
+    
+    # Rango temporal
+    accel_times_ns = accel_group['Timestamp'].astype('int64')
+    start_time_ns = accel_times_ns.min()
+    end_time_ns = accel_times_ns.max()
+    
+    if gyro_group is not None:
+        gyro_times_ns = gyro_group['Timestamp'].astype('int64')
+        start_time_ns = max(start_time_ns, gyro_times_ns.min())
+        end_time_ns = min(end_time_ns, gyro_times_ns.max())
+    
+    # Crear ventanas deslizantes
+    current_start_ns = start_time_ns
+    
+    while current_start_ns + window_duration_ns <= end_time_ns:
+        current_end_ns = current_start_ns + window_duration_ns
+        
+        # Extraer datos de acelerómetro para esta ventana
+        accel_mask = (
+            (accel_times_ns >= current_start_ns) & 
+            (accel_times_ns < current_end_ns)
+        )
+        window_accel = accel_group[accel_mask]
+        
+        # Extraer datos de giroscopio si está disponible
+        if gyro_group is not None:
+            gyro_mask = (
+                (gyro_times_ns >= current_start_ns) & 
+                (gyro_times_ns < current_end_ns)
+            )
+            window_gyro = gyro_group[gyro_mask]
+        else:
+            window_gyro = None
+        
+        # Validar y procesar ventana CON FORMA CONSISTENTE
+        window_data = process_multimodal_window_consistent(
+            window_accel, window_gyro, target_timesteps, 
+            window_seconds, min_data_threshold, max_gap_seconds,
+            current_start_ns, current_end_ns, sampling_rate,
+            target_channels, mode
+        )
+        
+        windows_data.append(window_data)
+        current_start_ns += step_duration_ns
+    
+    return windows_data
+
+
+def process_multimodal_window_consistent(window_accel, window_gyro, target_timesteps,
+                                       window_seconds, min_data_threshold, max_gap_seconds,
+                                       start_time_ns, end_time_ns, sampling_rate,
+                                       target_channels, mode):
+    """
+    Procesa una ventana multimodal con forma CONSISTENTE
+    Siempre devuelve target_channels canales, rellenando con ceros si es necesario
+    """
+    
+    # Validar acelerómetro
+    accel_valid, accel_info = validate_window_data(
+        window_accel, window_seconds, sampling_rate, min_data_threshold, max_gap_seconds
+    )
+    
+    if not accel_valid:
+        return {
+            'is_valid': False,
+            'reason': f"accel_{accel_info['reason']}",
+            'start_time': pd.to_datetime(start_time_ns),
+            'end_time': pd.to_datetime(end_time_ns),
+            'accel_samples': len(window_accel),
+            'gyro_samples': len(window_gyro) if window_gyro is not None else 0,
+            'sync_quality': 0.0,
+            'data_coverage': accel_info['data_coverage'],
+            'max_gap': accel_info['max_gap']
+        }
+    
+    # Procesar datos de acelerómetro
+    accel_data = window_accel[['X', 'Y', 'Z']].values
+    accel_timestamps = window_accel['Timestamp'].values
+    
+    try:
+        accel_resampled = resample_window_robust(
+            accel_data, accel_timestamps, target_timesteps, window_seconds
+        )
+    except Exception as e:
+        return {
+            'is_valid': False,
+            'reason': f"accel_resample_error: {str(e)[:50]}",
+            'start_time': pd.to_datetime(start_time_ns),
+            'end_time': pd.to_datetime(end_time_ns),
+            'accel_samples': len(window_accel),
+            'gyro_samples': len(window_gyro) if window_gyro is not None else 0,
+            'sync_quality': 0.0,
+            'data_coverage': accel_info['data_coverage'],
+            'max_gap': accel_info['max_gap']
+        }
+    
+    # CREAR ARRAY CON FORMA CONSISTENTE
+    final_data = np.zeros((target_timesteps, target_channels))
+    
+    # Copiar datos de acelerómetro (primeras 3 columnas)
+    final_data[:, 0:3] = accel_resampled
+    
+    # Procesar giroscopio si está disponible y se requiere
+    gyro_success = False
+    gyro_samples = 0
+    
+    if target_channels == 6 and window_gyro is not None and len(window_gyro) > 0:
+        gyro_valid, gyro_info = validate_window_data(
+            window_gyro, window_seconds, sampling_rate, min_data_threshold, max_gap_seconds
+        )
+        
+        if gyro_valid:
+            gyro_data = window_gyro[['X', 'Y', 'Z']].values
+            gyro_timestamps = window_gyro['Timestamp'].values
+            gyro_samples = len(window_gyro)
+            
+            try:
+                gyro_resampled = resample_window_robust(
+                    gyro_data, gyro_timestamps, target_timesteps, window_seconds
+                )
+                
+                # Verificar calidad del giroscopio
+                if is_window_quality_good(gyro_resampled):
+                    # Copiar datos de giroscopio (columnas 3-5)
+                    final_data[:, 3:6] = gyro_resampled
+                    gyro_success = True
+                
+            except Exception as e:
+                # Si falla el giroscopio, las columnas 3-5 quedan en ceros
+                pass
+    
+    # Verificar calidad final del acelerómetro
+    if is_window_quality_good(accel_resampled):
+        # Calcular sync_quality basado en disponibilidad de datos
+        if target_channels == 6:
+            sync_quality = 1.0 if gyro_success else 0.5  # Multimodal con/sin gyro
+        else:
+            sync_quality = 1.0  # Monomodal siempre 1.0
+        
+        return {
+            'is_valid': True,
+            'sensor_data': final_data,
+            'start_time': pd.to_datetime(start_time_ns),
+            'end_time': pd.to_datetime(end_time_ns),
+            'accel_samples': len(window_accel),
+            'gyro_samples': gyro_samples,
+            'sync_quality': sync_quality,
+            'data_coverage': accel_info['data_coverage'],
+            'max_gap': accel_info['max_gap']
+        }
+    else:
+        return {
+            'is_valid': False,
+            'reason': 'poor_accel_quality_after_resampling',
+            'start_time': pd.to_datetime(start_time_ns),
+            'end_time': pd.to_datetime(end_time_ns),
+            'accel_samples': len(window_accel),
+            'gyro_samples': gyro_samples,
+            'sync_quality': 0.0,
+            'data_coverage': accel_info['data_coverage'],
+            'max_gap': accel_info['max_gap']
+        }
