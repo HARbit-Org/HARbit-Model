@@ -53,58 +53,62 @@ def _temporal_block(x, filters, k=5, d=1, dropout=0.1, causal=True):
         x = layers.Conv1D(filters, 1, padding="same")(x)
     return layers.Add()([x, y])
 
-def create_cnn_lstm_model(input_shape, num_classes, use_tcn=True):
+def create_cnn_lstm_with_features(input_shape_raw, input_shape_feat, num_classes, use_tcn=True):
     """
-    CNN-only model for (timesteps, channels) e.g. (250, 3).
-    - No RNNs -> avoids CudnnRNN.
-    - Optionally adds TCN-style dilated residual blocks for long-range temporal context.
+    Modelo multimodal: 
+    - input 1: secuencias crudas (timesteps, channels)
+    - input 2: features de ingeniería (num_features)
     """
-    inp = layers.Input(shape=input_shape)  # (T, C)
+    # --- Branch A: señales crudas ---
+    inp_raw = layers.Input(shape=input_shape_raw, name="raw_input")  # (T, C)
 
-    # Stem
-    x = layers.Conv1D(64, 5, padding="same", activation="relu")(inp)
+    x = layers.Conv1D(64, 5, padding="same", activation="relu")(inp_raw)
     x = layers.LayerNormalization()(x)
     x = layers.Conv1D(64, 3, padding="same", activation="relu")(x)
     x = layers.LayerNormalization()(x)
-    x = layers.MaxPooling1D(pool_size=2)(x)     # T -> T/2
+    x = layers.MaxPooling1D(pool_size=2)(x)
     x = layers.Dropout(0.1)(x)
 
-    # Mid block
     x = layers.Conv1D(128, 3, padding="same", activation="relu")(x)
     x = layers.LayerNormalization()(x)
     x = layers.Conv1D(128, 3, padding="same", activation="relu")(x)
     x = layers.LayerNormalization()(x)
-    x = layers.MaxPooling1D(pool_size=2)(x)     # T -> T/4
+    x = layers.MaxPooling1D(pool_size=2)(x)
     x = layers.Dropout(0.1)(x)
 
-    # Wider features
     x = layers.Conv1D(256, 3, padding="same", activation="relu")(x)
     x = layers.LayerNormalization()(x)
     x = layers.Conv1D(256, 3, padding="same", activation="relu")(x)
     x = layers.LayerNormalization()(x)
     x = layers.Dropout(0.3)(x)
 
-    # Optional TCN stack to capture long temporal dependencies (no RNN)
+    # Optional TCN
     if use_tcn:
         for d in [1, 2, 4, 8, 16]:
             x = _temporal_block(x, filters=256, k=5, d=d, dropout=0.1, causal=True)
 
-    # Global aggregation (no sequence op)
-    x = layers.GlobalAveragePooling1D()(x)
+    x_raw = layers.GlobalAveragePooling1D()(x)
 
-    # Classifier head
-    x = layers.Dense(256, activation="relu")(x)
-    x = layers.LayerNormalization()(x)
-    x = layers.Dropout(0.3)(x)
+    # --- Branch B: features ---
+    inp_feat = layers.Input(shape=input_shape_feat, name="feature_input")  # (num_features,)
+    y = layers.Dense(128, activation="relu")(inp_feat)
+    y = layers.LayerNormalization()(y)
+    y = layers.Dropout(0.3)(y)
 
-    x = layers.Dense(128, activation="relu")(x)
-    x = layers.LayerNormalization()(x)
-    x = layers.Dropout(0.3)(x)
+    # --- Fusion ---
+    z = layers.Concatenate()([x_raw, y])
+    z = layers.Dense(256, activation="relu")(z)
+    z = layers.LayerNormalization()(z)
+    z = layers.Dropout(0.3)(z)
 
-    logits = Dense(num_classes)(x)
+    z = layers.Dense(128, activation="relu")(z)
+    z = layers.LayerNormalization()(z)
+    z = layers.Dropout(0.3)(z)
+
+    logits = layers.Dense(num_classes)(z)
     out = layers.Activation("softmax", dtype="float32")(logits)
 
-    model = models.Model(inp, out)
+    model = models.Model(inputs=[inp_raw, inp_feat], outputs=out)
     model.compile(
         optimizer=optimizers.Adam(learning_rate=_cnn_cfg["learning_rate"]),
         loss=_cnn_cfg["loss"],
