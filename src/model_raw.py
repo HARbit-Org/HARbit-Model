@@ -13,6 +13,8 @@ import numpy as np
 import sys
 import os
 import json
+# from functions.multimodal import create_multimodal_windows_robust
+from functions.multimodal_dom_temporal_frequence import create_multimodal_windows_with_features
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
 import gc, time
 from pathlib import Path
@@ -722,8 +724,10 @@ def train_final_model_on_full_data(
     Saves model + encoder + run metadata.
     """
     print("🚀 Building windows for FINAL training…")
-    X_all, y_all, subjects_all, metadata_all = create_raw_windows_250_timesteps_robust(
-        df=df_accel,
+    # X_all, y_all, subjects_all, metadata_all = create_multimodal_windows_robust(
+    X_all, X_features, y_all, subjects_all, metadata_all = create_multimodal_windows_with_features(
+        df_accel=df_accel,
+        df_gyro=df_gyro,
         window_seconds=window_seconds,
         overlap_percent=overlap_percent,
         sampling_rate=sampling_rate,
@@ -850,7 +854,7 @@ final_run = train_final_model_on_full_data(
     overlap_percent=50,
     sampling_rate=20,
     target_timesteps=100,      # <- match what you used last
-    epochs=100,
+    epochs=20,
     batch_size=256,
     results_dir="final_model"
 )
