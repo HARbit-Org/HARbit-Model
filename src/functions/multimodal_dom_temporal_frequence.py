@@ -380,17 +380,17 @@ def create_multimodal_windows_with_features(df_accel, df_gyro=None, window_secon
             metadata_df['n_features'] = X_features.shape[1]
             metadata_df['feature_extraction'] = True
 
-        X_combined = combine_raw_and_features_batched(
-            X_raw,
-            X_features,
-            mode= fusion_strategy,
-            target_timesteps=target_timesteps
-        )
+        # X_combined = combine_raw_and_features_batched(
+        #     X_raw,
+        #     X_features,
+        #     mode= fusion_strategy,
+        #     target_timesteps=target_timesteps
+        # )
 
-        return X_combined, y, subjects, metadata_df
+        return X_raw, X_features, y, subjects, metadata_df
     else:
         print("  ❌ No se pudieron extraer características")
-        return X_raw, y, subjects, metadata_df
+        return X_raw, None, y, subjects, metadata_df
 
 
 # Actualizar la función principal para incluir características opcionales
