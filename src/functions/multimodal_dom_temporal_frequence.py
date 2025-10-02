@@ -7,6 +7,85 @@ from scipy import signal
 from scipy.stats import skew, kurtosis
 from scipy.fft import fft, fftfreq
 
+def combine_raw_and_features_batched(X_raw, X_features, mode='weighted_concat', 
+                                   batch_size=5000, target_timesteps=100):
+    """
+    Combina datos en lotes para evitar problemas de memoria
+    """
+    n_samples = X_raw.shape[0]
+    n_timesteps = X_raw.shape[1] 
+    n_channels = X_raw.shape[2]
+    n_features = X_features.shape[1]
+    
+    print(f"🔄 Procesando {n_samples} muestras en lotes de {batch_size}")
+    print(f"📊 Memoria estimada: {(n_samples * n_timesteps * (n_channels + n_features) * 4) / 1e9:.2f} GB")
+    
+    # Crear array de salida
+    final_shape = (n_samples, n_timesteps, n_channels + n_features)
+    X_combined = np.empty(final_shape, dtype=np.float32)
+    
+    # Procesar por lotes
+    for start_idx in range(0, n_samples, batch_size):
+        end_idx = min(start_idx + batch_size, n_samples)
+        
+        print(f"    Procesando lote {start_idx//batch_size + 1}: {start_idx}-{end_idx}")
+        
+        # Extraer lote
+        X_raw_batch = X_raw[start_idx:end_idx]
+        X_features_batch = X_features[start_idx:end_idx]
+        
+        # Combinar lote
+        batch_combined = _combine_batch(X_raw_batch, X_features_batch, mode, n_timesteps)
+        
+        # Guardar en array final
+        X_combined[start_idx:end_idx] = batch_combined
+        
+        # Limpiar memoria del lote
+        del X_raw_batch, X_features_batch, batch_combined
+    
+    return X_combined
+
+def _combine_batch(X_raw_batch, X_features_batch, mode, timesteps):
+    """Función auxiliar para combinar un lote"""
+    if mode == 'weighted_concat':
+        # Normalizar
+        from sklearn.preprocessing import StandardScaler
+        scaler = StandardScaler()
+        X_features_normalized = scaler.fit_transform(X_features_batch)
+        
+        # Escalar
+        raw_std = np.std(X_raw_batch)
+        feature_std = np.std(X_features_normalized)
+        
+        if feature_std > 0:
+            X_features_scaled = X_features_normalized * (raw_std / feature_std)
+        else:
+            X_features_scaled = X_features_normalized
+        
+        # Expandir
+        X_features_expanded = np.repeat(
+            X_features_scaled[:, np.newaxis, :], 
+            timesteps, 
+            axis=1
+        )
+        
+        # Concatenar
+        return np.concatenate([X_raw_batch, X_features_expanded], axis=2)
+    
+    else:
+        # Modo simple
+        X_features_expanded = np.repeat(
+            X_features_batch[:, np.newaxis, :], 
+            timesteps, 
+            axis=1
+        )
+        return np.concatenate([X_raw_batch, X_features_expanded], axis=2)
+
+
+# ---------------------------------------------------------------------------------
+#                               CREACION DE VENTANAS
+# ---------------------------------------------------------------------------------
+
 def extract_temporal_features(signal_data):
     """
     Extrae características del dominio temporal de una señal
@@ -227,7 +306,8 @@ def create_multimodal_windows_with_features(df_accel, df_gyro=None, window_secon
                                           overlap_percent=50, sampling_rate=20, 
                                           target_timesteps=250, min_data_threshold=0.8, 
                                           max_gap_seconds=1.0, sync_tolerance_ms=50,
-                                          extract_features=True):
+                                          extract_features=True,
+                                          fusion_strategy="weighted_concat"):
     """
     Versión EXTENDIDA: Crea ventanas con extracción opcional de características
     
@@ -299,11 +379,18 @@ def create_multimodal_windows_with_features(df_accel, df_gyro=None, window_secon
         if metadata_df is not None:
             metadata_df['n_features'] = X_features.shape[1]
             metadata_df['feature_extraction'] = True
-        
-        return X_raw, X_features, y, subjects, metadata_df
+
+        X_combined = combine_raw_and_features_batched(
+            X_raw,
+            X_features,
+            mode= fusion_strategy,
+            target_timesteps=target_timesteps
+        )
+
+        return X_combined, y, subjects, metadata_df
     else:
         print("  ❌ No se pudieron extraer características")
-        return X_raw, None, y, subjects, metadata_df
+        return X_raw, y, subjects, metadata_df
 
 
 # Actualizar la función principal para incluir características opcionales
