@@ -456,7 +456,7 @@ def create_multimodal_windows_robust(df_accel, df_gyro=None, window_seconds=5,
     total_windows_created = 0
     windows_with_gyro = 0
     windows_accel_only = 0
-    
+
     # Procesar por usuario y actividad
     for (user_id, activity), accel_group in df_accel_sync.groupby(['Subject-id', 'Activity Label']):
         
