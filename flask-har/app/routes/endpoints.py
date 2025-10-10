@@ -18,14 +18,23 @@ def process_data_endpoint():
             logger.error(f"Error de validación: {err.messages}")
             return jsonify({'error': 'Datos inválidos', 'details': err.messages}), 422
         
-        logger.info(f"Datos recibidos: {data_request}")
+        # logger.info(f"Datos recibidos: {data_request}")
         
-        # Procesar datos
-        processed_data = process_data(data_request)
+        # Access to main data
+        data_request = data_request["batches"]
+
+        result_data = []
+        for id in range(len(data_request)):
+            data_request = data_request[id]
+
+            target_timestamp = data_request['timestamp']
+            logger.info(f"Target timestamp: {target_timestamp}")
+            processed_data = process_data(data_request, target_timestamp)
+            result_data.extend(processed_data)
         
         # Preparar respuesta
         response_schema = DataResponseSchema()
-        response_data = response_schema.dump({'data': processed_data})
+        response_data = response_schema.dump({'data': result_data})
         
         return jsonify(response_data), 200
         

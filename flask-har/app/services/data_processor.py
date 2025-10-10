@@ -28,26 +28,40 @@ except Exception as e:
     infer = None
     label_encoder = None
 
-def process_data(data: Dict[str, Any]) -> Dict[str, Any]:
+def adjust_timestamps_to_device_time(df, target_timestamp, timestamp_col='timestamp'):
+    """
+    Ajusta los timestamps relativos al timestamp del dispositivo
+    
+    Args:
+        df: DataFrame con datos
+        target_timestamp: Timestamp del dispositivo (Unix epoch en segundos)
+        timestamp_col: Nombre de la columna de timestamp
+    
+    Returns:
+        DataFrame con timestamps ajustados
+    """
+    # Obtener timestamps actuales
+    current_timestamps = df[timestamp_col].to_numpy()
+    
+    # Calcular el timestamp más antiguo
+    min_timestamp = current_timestamps.min()
+    
+    # Calcular los offsets relativos desde el primer timestamp
+    relative_offsets = (current_timestamps - min_timestamp) + (target_timestamp * 1_000_000) # 
+    
+    return df.with_columns(pl.Series(timestamp_col, relative_offsets))
+
+def process_data(data: Dict[str, Any], target_timestamp: int) -> Dict[str, Any]:
     try:
         # Validar que el modelo esté cargado
         if infer is None or label_encoder is None:
             raise Exception("Modelo o encoder no están disponibles")
-            
-        # Validar que los datos contengan las claves esperadas
-        if 'gyro' not in data or 'accel' not in data:
-            raise ValueError("Los datos deben contener 'gyro' y 'accel'")
-        
-        # Validar que sean listas
-        if not isinstance(data['gyro'], list) or not isinstance(data['accel'], list):
-            raise ValueError("'gyro' y 'accel' deben ser listas")
-        
-        # Validar que las listas no estén vacías
-        if len(data['gyro']) == 0 or len(data['accel']) == 0:
-            raise ValueError("Los datos de 'gyro' y 'accel' no pueden estar vacíos")
 
+        # Timestamp definido por el dispositivo
+        
+        
         # Crear DataFrames de Polars
-        accel_temp = pl.DataFrame(data['accel'])
+        accel_temp = pl.DataFrame(data['readings'])
         # gyro_temp = pl.DataFrame(data['gyro'])
 
         # Agregar columnas requeridas
@@ -59,14 +73,16 @@ def process_data(data: Dict[str, Any]) -> Dict[str, Any]:
         # Normalizar columnas
         df_accel = normalize_columns(
             accel_temp,
-            user_col_name="Usuario", 
-            timestamp_col_name="timestamp", 
-            label_col_name="gt", 
-            x_col_name="x", 
+            user_col_name="Usuario",
+            timestamp_col_name="timestamp",
+            label_col_name="gt",
+            x_col_name="x",
             y_col_name="y", 
             z_col_name="z"
         )
         
+        df_accel = adjust_timestamps_to_device_time(df_accel, target_timestamp, 'Timestamp')
+
         # Convertir timestamps
         df_accel = convert_timestamp(df_accel)
         # df_gyro = convert_timestamp(df_gyro)
