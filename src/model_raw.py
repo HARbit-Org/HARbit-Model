@@ -13,8 +13,7 @@ import numpy as np
 import sys
 import os
 import json
-# from functions.multimodal import create_multimodal_windows_robust
-from functions.multimodal_dom_temporal_frequence import create_multimodal_windows_with_features
+from functions.multimodal import create_multimodal_windows_robust
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
 import gc, time
 from pathlib import Path
@@ -724,10 +723,10 @@ def train_final_model_on_full_data(
     Saves model + encoder + run metadata.
     """
     print("🚀 Building windows for FINAL training…")
-    # X_all, y_all, subjects_all, metadata_all = create_multimodal_windows_robust(
-    X_all, X_features, y_all, subjects_all, metadata_all = create_multimodal_windows_with_features(
+    X_all, y_all, subjects_all, metadata_all = create_multimodal_windows_robust(
+    # X_all, X_features, y_all, subjects_all, metadata_all = create_multimodal_windows_with_features(
         df_accel=df_accel,
-        df_gyro=df_gyro,
+        # df_gyro=df_gyro,
         window_seconds=window_seconds,
         overlap_percent=overlap_percent,
         sampling_rate=sampling_rate,
@@ -766,10 +765,12 @@ def train_final_model_on_full_data(
     train_mask = ~val_mask
 
     X_train = X_all[train_mask].astype("float32")
-    y_train = y_all_encoded[train_mask]
     X_val   = X_all[val_mask].astype("float32")
-    y_val   = y_all_encoded[val_mask]
+    # X_train_feat = X_features[train_mask].astype("float32")
+    # X_val_feat   = X_features[val_mask].astype("float32")
 
+    y_train = y_all_encoded[train_mask]
+    y_val   = y_all_encoded[val_mask]
     print(f"👥 Train users: {len(np.unique(subjects_all[train_mask]))} | "
           f"Val users: {len(np.unique(subjects_all[val_mask]))}")
     print(f"📦 Train windows: {len(X_train)} | Val windows: {len(X_val)}")

@@ -27,10 +27,10 @@ config:
         "Sit": ['Sitting'],
         "Type": ['Typing'],
         "Write": ['Writing'],
-        "Stand": ['Standing'],
+        # "Stand": ['Standing'],
         "Eat": ['Eating Soup', 'Eating Chips', 'Eating Pasta', 'Eating Sandwich', 'Drinking from Cup'],
         "Workouts": ['Kicking (Soccer Ball)', 'Playing Catch w/Tennis Ball', 'Dribbling (Basketball)'],
-        "Others": ['Clapping', 'Folding Clothes', 'Brushing Teeth']
+        "Others": ['Clapping', 'Folding Clothes', 'Brushing Teeth', 'Standing']
       }
 
     activities:

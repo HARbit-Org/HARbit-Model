@@ -7,6 +7,7 @@ __all__ = [
             'callbacks', 
             'create_cnn_lstm_model', 
             # 'adaptive_transfer_learning_cnn_lstm',
+            # 'create_cnn_lstm_with_features',
             'loso_cross_validation',
             'visualize_loso_results'
         ]

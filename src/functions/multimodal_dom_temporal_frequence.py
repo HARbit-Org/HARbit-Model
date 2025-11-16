@@ -88,17 +88,12 @@ def _combine_batch(X_raw_batch, X_features_batch, mode, timesteps):
 
 def extract_temporal_features(signal_data):
     """
-    Extrae características del dominio temporal de una señal
-    
-    Args:
-        signal_data: Array de forma (timesteps, channels) o (timesteps,)
-    
-    Returns:
-        dict: Diccionario con características temporales
+    Extrae características clave del dominio temporal para diferenciar
+    actividades como 'pararse' y 'comer'.
     """
     features = {}
     
-    # Asegurar que sea 2D
+    # Asegurar formato 2D
     if signal_data.ndim == 1:
         signal_data = signal_data.reshape(-1, 1)
     
@@ -108,84 +103,38 @@ def extract_temporal_features(signal_data):
         channel_data = signal_data[:, ch]
         prefix = f'ch{ch}_'
         
-        # Características básicas
-        features[f'{prefix}mean'] = np.mean(channel_data)
+        # Variabilidad y energía
         features[f'{prefix}std'] = np.std(channel_data)
         features[f'{prefix}var'] = np.var(channel_data)
-        features[f'{prefix}min'] = np.min(channel_data)
-        features[f'{prefix}max'] = np.max(channel_data)
-        features[f'{prefix}range'] = features[f'{prefix}max'] - features[f'{prefix}min']
-        features[f'{prefix}median'] = np.median(channel_data)
-        
-        # Percentiles
-        features[f'{prefix}q25'] = np.percentile(channel_data, 25)
-        features[f'{prefix}q75'] = np.percentile(channel_data, 75)
-        features[f'{prefix}iqr'] = features[f'{prefix}q75'] - features[f'{prefix}q25']
-        
-        # Características de forma
-        features[f'{prefix}skewness'] = skew(channel_data)
-        features[f'{prefix}kurtosis'] = kurtosis(channel_data)
-        
-        # RMS (Root Mean Square)
+        features[f'{prefix}mad'] = np.mean(np.abs(channel_data - np.mean(channel_data)))
         features[f'{prefix}rms'] = np.sqrt(np.mean(channel_data**2))
-        
-        # Energy
         features[f'{prefix}energy'] = np.sum(channel_data**2)
         
-        # Zero crossing rate
+        # Cruces por cero (cambios de dirección)
         zero_crossings = np.sum(np.diff(np.signbit(channel_data)))
         features[f'{prefix}zcr'] = zero_crossings / len(channel_data)
         
-        # Mean absolute deviation
-        features[f'{prefix}mad'] = np.mean(np.abs(channel_data - np.mean(channel_data)))
-        
-        # Características de la primera diferencia (velocidad)
+        # Velocidad y aceleración
         if len(channel_data) > 1:
             diff_data = np.diff(channel_data)
-            features[f'{prefix}diff_mean'] = np.mean(diff_data)
             features[f'{prefix}diff_std'] = np.std(diff_data)
-            features[f'{prefix}diff_max'] = np.max(np.abs(diff_data))
             
-            # Segunda diferencia (aceleración)
             if len(diff_data) > 1:
                 diff2_data = np.diff(diff_data)
-                features[f'{prefix}diff2_mean'] = np.mean(diff2_data)
                 features[f'{prefix}diff2_std'] = np.std(diff2_data)
-                features[f'{prefix}diff2_max'] = np.max(np.abs(diff2_data))
-    
-    # Características inter-canal si hay múltiples canales
-    if n_channels > 1:
-        # Correlación entre canales
-        for i in range(n_channels):
-            for j in range(i+1, n_channels):
-                corr = np.corrcoef(signal_data[:, i], signal_data[:, j])[0, 1]
-                features[f'corr_ch{i}_ch{j}'] = corr if not np.isnan(corr) else 0.0
         
-        # Magnitud vectorial (para datos de acelerómetro/giroscopio)
+        # Magnitud total si hay tres ejes (ej. acelerómetro)
         if n_channels == 3:
             magnitude = np.sqrt(np.sum(signal_data**2, axis=1))
-            features['magnitude_mean'] = np.mean(magnitude)
             features['magnitude_std'] = np.std(magnitude)
             features['magnitude_max'] = np.max(magnitude)
-            features['magnitude_min'] = np.min(magnitude)
     
     return features
 
 
 def extract_frequency_features(signal_data, sampling_rate=20):
-    """
-    Extrae características del dominio frecuencial usando FFT
-    
-    Args:
-        signal_data: Array de forma (timesteps, channels) o (timesteps,)
-        sampling_rate: Frecuencia de muestreo en Hz
-    
-    Returns:
-        dict: Diccionario con características frecuenciales
-    """
     features = {}
     
-    # Asegurar que sea 2D
     if signal_data.ndim == 1:
         signal_data = signal_data.reshape(-1, 1)
     
@@ -195,89 +144,41 @@ def extract_frequency_features(signal_data, sampling_rate=20):
         channel_data = signal_data[:, ch]
         prefix = f'ch{ch}_'
         
-        # Aplicar ventana para reducir el leakage espectral
+        # Aplicar ventana Hanning para reducir leakage
         windowed_data = channel_data * np.hanning(len(channel_data))
         
         # FFT
         fft_values = fft(windowed_data)
-        fft_magnitude = np.abs(fft_values[:len(fft_values)//2])  # Solo frecuencias positivas
+        fft_magnitude = np.abs(fft_values[:len(fft_values)//2])
         fft_freqs = fftfreq(len(windowed_data), 1/sampling_rate)[:len(fft_values)//2]
-        
-        # Normalizar el espectro
-        fft_magnitude = fft_magnitude / len(windowed_data)
-        
-        # Densidad espectral de potencia
-        psd = fft_magnitude**2
-        
-        # Características básicas del espectro
-        features[f'{prefix}spectral_energy'] = np.sum(psd)
-        features[f'{prefix}spectral_mean'] = np.mean(fft_magnitude)
-        features[f'{prefix}spectral_std'] = np.std(fft_magnitude)
-        features[f'{prefix}spectral_max'] = np.max(fft_magnitude)
+        psd = (fft_magnitude / len(windowed_data))**2
         
         # Frecuencia dominante
-        dominant_freq_idx = np.argmax(psd[1:]) + 1  # Excluir DC
+        dominant_freq_idx = np.argmax(psd[1:]) + 1
         features[f'{prefix}dominant_freq'] = fft_freqs[dominant_freq_idx]
-        features[f'{prefix}dominant_freq_magnitude'] = fft_magnitude[dominant_freq_idx]
-        
-        # Centroide espectral (centro de masa del espectro)
-        if np.sum(psd) > 0:
-            spectral_centroid = np.sum(fft_freqs * psd) / np.sum(psd)
-            features[f'{prefix}spectral_centroid'] = spectral_centroid
-        else:
-            features[f'{prefix}spectral_centroid'] = 0.0
-        
-        # Rolloff espectral (frecuencia por debajo de la cual está el 85% de la energía)
-        cumulative_energy = np.cumsum(psd)
-        total_energy = cumulative_energy[-1]
-        if total_energy > 0:
-            rolloff_idx = np.where(cumulative_energy >= 0.85 * total_energy)[0]
-            if len(rolloff_idx) > 0:
-                features[f'{prefix}spectral_rolloff'] = fft_freqs[rolloff_idx[0]]
-            else:
-                features[f'{prefix}spectral_rolloff'] = fft_freqs[-1]
-        else:
-            features[f'{prefix}spectral_rolloff'] = 0.0
-        
-        # Spread espectral (dispersión alrededor del centroide)
-        if np.sum(psd) > 0:
-            spectral_spread = np.sqrt(np.sum(((fft_freqs - features[f'{prefix}spectral_centroid'])**2) * psd) / np.sum(psd))
-            features[f'{prefix}spectral_spread'] = spectral_spread
-        else:
-            features[f'{prefix}spectral_spread'] = 0.0
-        
-        # Skewness y kurtosis espectrales
-        features[f'{prefix}spectral_skewness'] = skew(fft_magnitude)
-        features[f'{prefix}spectral_kurtosis'] = kurtosis(fft_magnitude)
         
         # Entropía espectral
-        psd_normalized = psd / (np.sum(psd) + 1e-12)
-        spectral_entropy = -np.sum(psd_normalized * np.log2(psd_normalized + 1e-12))
-        features[f'{prefix}spectral_entropy'] = spectral_entropy
+        psd_norm = psd / (np.sum(psd) + 1e-12)
+        features[f'{prefix}spectral_entropy'] = -np.sum(psd_norm * np.log2(psd_norm + 1e-12))
         
-        # Características en bandas de frecuencia específicas
-        # Banda baja (0-2 Hz)
-        low_band_mask = (fft_freqs >= 0) & (fft_freqs <= 2)
-        features[f'{prefix}low_band_energy'] = np.sum(psd[low_band_mask])
+        # Energía por bandas
+        low_band = (fft_freqs >= 0) & (fft_freqs <= 2)
+        mid_band = (fft_freqs > 2) & (fft_freqs <= 5)
         
-        # Banda media (2-5 Hz)
-        mid_band_mask = (fft_freqs > 2) & (fft_freqs <= 5)
-        features[f'{prefix}mid_band_energy'] = np.sum(psd[mid_band_mask])
+        features[f'{prefix}low_band_energy'] = np.sum(psd[low_band])
+        features[f'{prefix}mid_band_energy'] = np.sum(psd[mid_band])
         
-        # Banda alta (5-10 Hz)
-        high_band_mask = (fft_freqs > 5) & (fft_freqs <= 10)
-        features[f'{prefix}high_band_energy'] = np.sum(psd[high_band_mask])
+        total_energy = features[f'{prefix}low_band_energy'] + features[f'{prefix}mid_band_energy']
+        features[f'{prefix}low_band_ratio'] = features[f'{prefix}low_band_energy'] / (total_energy + 1e-12)
+        features[f'{prefix}mid_band_ratio'] = features[f'{prefix}mid_band_energy'] / (total_energy + 1e-12)
         
-        # Ratios de energía entre bandas
-        total_band_energy = features[f'{prefix}low_band_energy'] + features[f'{prefix}mid_band_energy'] + features[f'{prefix}high_band_energy']
-        if total_band_energy > 0:
-            features[f'{prefix}low_band_ratio'] = features[f'{prefix}low_band_energy'] / total_band_energy
-            features[f'{prefix}mid_band_ratio'] = features[f'{prefix}mid_band_energy'] / total_band_energy
-            features[f'{prefix}high_band_ratio'] = features[f'{prefix}high_band_energy'] / total_band_energy
-        else:
-            features[f'{prefix}low_band_ratio'] = 0.0
-            features[f'{prefix}mid_band_ratio'] = 0.0
-            features[f'{prefix}high_band_ratio'] = 0.0
+        # Centroide y rolloff espectral
+        if np.sum(psd) > 0:
+            centroid = np.sum(fft_freqs * psd) / np.sum(psd)
+            features[f'{prefix}spectral_centroid'] = centroid
+            cumulative_energy = np.cumsum(psd)
+            rolloff_idx = np.where(cumulative_energy >= 0.85 * cumulative_energy[-1])[0]
+            features[f'{prefix}spectral_rolloff'] = fft_freqs[rolloff_idx[0]] if len(rolloff_idx) > 0 else 0.0
     
     return features
 
