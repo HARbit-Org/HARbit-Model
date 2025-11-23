@@ -1,0 +1,39 @@
+{
+  "timestamp": "20251013_000022",
+  "input_shape": [
+    100,
+    3
+  ],
+  "num_classes": 7,
+  "train_windows": 57564,
+  "val_windows": 6301,
+  "val_users": [
+    1619.0,
+    1621.0,
+    1647.0,
+    1648.0,
+    1650.0
+  ],
+  "window_seconds": 5,
+  "overlap_percent": 50,
+  "sampling_rate": 20,
+  "target_timesteps": 100,
+  "epochs": 20,
+  "batch_size": 256,
+  "activities_after_mapping": [
+    "Eat",
+    "Others",
+    "Sit",
+    "Type",
+    "Walk",
+    "Workouts",
+    "Write"
+  ],
+  "history_keys": [
+    "loss",
+    "accuracy",
+    "val_loss",
+    "val_accuracy",
+    "lr"
+  ]
+}

@@ -1,5 +1,6 @@
 # Folders
-src/data
+src/data/preprocess
+src/data/wisdm*
 src/figures/images
 src/test/data
 src/utils/__pycache__
